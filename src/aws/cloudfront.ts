@@ -2,7 +2,7 @@ import {
   CloudFrontClient,
   GetDistributionCommand,
   CreateDistributionCommand,
-  // UpdateDistributionCommand,
+  UpdateDistributionCommand, // UNCOMMENTED
   ListDistributionsCommand,
   ListOriginAccessControlsCommand,
   CreateOriginAccessControlCommand,
@@ -73,8 +73,23 @@ function getDefaultDistributionInput(
       CacheBehaviors: {
         Quantity: Number(0),
       },
+      // UPDATED: Error pages for SPA routing
       CustomErrorResponses: {
-        Quantity: Number(0),
+        Quantity: Number(2),
+        Items: [
+          {
+            ErrorCode: 403, // S3 returns 403 for missing files
+            ResponseCode: 200,
+            ResponsePagePath: `/index.html`, // Will be rewritten to /{subdomain}/index.html
+            ErrorCachingMinTTL: 10,
+          },
+          {
+            ErrorCode: 404, // S3 returns 404 for missing files  
+            ResponseCode: 200,
+            ResponsePagePath: `/index.html`, // Will be rewritten to /{subdomain}/index.html
+            ErrorCachingMinTTL: 10,
+          },
+        ],
       },
       DefaultCacheBehavior: {
         TargetOriginId: originId,
@@ -148,14 +163,14 @@ function getDefaultDistributionInput(
 export async function getCloudfrontByOrigin(originId: string) {
   const distributions = await client.send(new ListDistributionsCommand())
 
-  const distributionId = distributions.DistributionList?.Items?.find(
+  const distributionItem = distributions.DistributionList?.Items?.find(
     (item) => item.Origins?.Items?.[0]?.DomainName === originId,
-  )?.Id
+  )
 
-  if (!distributionId) return
+  if (!distributionItem?.Id) return
 
   const distribution = await client.send(
-    new GetDistributionCommand({ Id: distributionId }),
+    new GetDistributionCommand({ Id: distributionItem.Id }),
   )
 
   return distribution
@@ -289,6 +304,39 @@ async function createCloudfrontFunction() {
   }
 }
 
+// NEW: Helper function to check if distribution needs updating
+function needsDistributionUpdate(existingConfig: any, newConfig: any): boolean {
+  // Check if CustomErrorResponses configuration is different
+  const existingErrorResponses = existingConfig.CustomErrorResponses
+  const newErrorResponses = newConfig.CustomErrorResponses
+  
+  if (existingErrorResponses.Quantity !== newErrorResponses.Quantity) {
+    return true
+  }
+  
+  // If we have error responses, check if they match
+  if (newErrorResponses.Quantity > 0) {
+    if (!existingErrorResponses.Items || existingErrorResponses.Items.length === 0) {
+      return true // Need to add error responses
+    }
+    
+    // Check if error response configuration matches
+    const hasMatchingErrorPages = newErrorResponses.Items.every((newItem: any) => 
+      existingErrorResponses.Items.some((existingItem: any) => 
+        existingItem.ErrorCode === newItem.ErrorCode &&
+        existingItem.ResponseCode === newItem.ResponseCode &&
+        existingItem.ResponsePagePath === newItem.ResponsePagePath
+      )
+    )
+    
+    if (!hasMatchingErrorPages) {
+      return true
+    }
+  }
+  
+  return false
+}
+
 export async function createCloudfront(originId: string) {
   const distributionFound = await getCloudfrontByOrigin(originId)
   const originAccessControlId = await getOriginAccessControl(originId)
@@ -299,35 +347,50 @@ export async function createCloudfront(originId: string) {
     originAccessControlId,
     cloudfrontFunctionArn,
   )
-  console.log("Creating Cloudfront Distribution", distributionInput)
-  console.log(
-    "Cloudfront Distribution Aliases",
-    distributionInput.DistributionConfig.Aliases.Items,
-  )
-  console.log(
-    "Cloudfront Distribution Origins",
-    distributionInput.DistributionConfig.Origins.Items,
-  )
+  
+  console.log("Creating/Updating Cloudfront Distribution for origin:", originId)
+  console.log("Cloudfront Distribution Aliases:", distributionInput.DistributionConfig.Aliases.Items)
+  console.log("Cloudfront Distribution Origins:", distributionInput.DistributionConfig.Origins.Items)
 
   let distribution
 
   if (!distributionFound) {
+    // CREATE new distribution
+    console.log("Creating new CloudFront distribution...")
     const command = new CreateDistributionCommand(distributionInput)
     const res = await client.send(command)
     distribution = res.Distribution
+    console.log("Created new CloudFront distribution:", distribution?.Id)
   } else {
-    console.log("Updating Cloudfront Distribution", {
-      id: distributionFound.Distribution?.Id,
-      eTag: distributionFound.ETag,
-    })
-    // TODO: Ability to update Cloudfront distribution
-    // const command = new UpdateDistributionCommand({
-    //   Id: distributionFound?.Distribution?.Id,
-    //   IfMatch: distributionFound?.ETag,
-    //   DistributionConfig: distributionInput.DistributionConfig,
-    // })
-    // const res = await client.send(command)
-    distribution = distributionFound?.Distribution
+    // UPDATE existing distribution if needed
+    const existingConfig = distributionFound.Distribution?.DistributionConfig
+    const needsUpdate = needsDistributionUpdate(existingConfig, distributionInput.DistributionConfig)
+    
+    if (needsUpdate) {
+      console.log("Updating existing CloudFront distribution:", {
+        id: distributionFound.Distribution?.Id,
+        eTag: distributionFound.ETag,
+      })
+      
+      const command = new UpdateDistributionCommand({
+        Id: distributionFound.Distribution?.Id,
+        IfMatch: distributionFound.ETag,
+        DistributionConfig: distributionInput.DistributionConfig,
+      })
+      
+      try {
+        const res = await client.send(command)
+        distribution = res.Distribution
+        console.log("Successfully updated CloudFront distribution")
+      } catch (error) {
+        console.error("Failed to update CloudFront distribution:", error)
+        // Fall back to using existing distribution
+        distribution = distributionFound.Distribution
+      }
+    } else {
+      console.log("CloudFront distribution is already up to date")
+      distribution = distributionFound.Distribution
+    }
   }
 
   if (!distribution || !distribution.Id || !distribution.DomainName)
