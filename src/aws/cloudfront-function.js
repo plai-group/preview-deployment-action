@@ -1,3 +1,4 @@
+// Version 1.4.0 - Enhanced CloudFront Function with better file detection
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function handler(event) {
   const request = event.request
@@ -11,14 +12,13 @@ function handler(event) {
   console.log("Original uri:", uri)
   console.log("Query string:", request.querystring)
 
-  // Check whether the URI is missing a file name.
+  // Handle different URI patterns
   if (uri.endsWith("/")) {
     // For root paths like "/" or "/some-path/"
     request.uri = `/${subDomain}${uri}index.html`
     console.log("Case: Directory - New URI:", request.uri)
-  } else if (uri.includes(".") && isActualFile(uri)) {
+  } else if (isActualFile(uri)) {
     // For actual files like "/script.js" or "/styles.css"
-    // But NOT for routes with search params or encoded characters
     request.uri = `/${subDomain}${uri}`
     console.log("Case: File - New URI:", request.uri)
   } else {
@@ -37,17 +37,13 @@ function isActualFile(uri) {
   // Common file extensions for web assets
   const fileExtensions = [
     '.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico',
-    '.woff', '.woff2', '.ttf', '.eot', '.pdf', '.mp4', '.webm',
-    '.json', '.xml', '.txt', '.html', '.htm'
+    '.woff', '.woff2', '.ttf', '.eot', '.pdf', '.mp4', '.webm', '.webp',
+    '.json', '.xml', '.txt', '.html', '.htm', '.map', '.gz', '.br'
   ]
 
+  // Remove query parameters and hash fragments for extension checking
+  const cleanUri = uri.split('?')[0].split('#')[0].toLowerCase()
+
   // Check if the URI ends with a known file extension
-  return fileExtensions.some(ext => {
-    const lowerUri = uri.toLowerCase()
-    return lowerUri.includes(ext) && (
-      lowerUri.endsWith(ext) ||
-      lowerUri.indexOf(ext + '?') !== -1 ||
-      lowerUri.indexOf(ext + '#') !== -1
-    )
-  })
+  return fileExtensions.some(ext => cleanUri.endsWith(ext))
 }
