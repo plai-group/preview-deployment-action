@@ -43,16 +43,32 @@ function handler(event) {
     request.uri = `/${subDomain}${uri}index.html`
     console.log("Case: Directory - New URI:", request.uri)
   }
-  // Handle SPA routes (paths without file extensions)
+  // Handle asset requests - these can come from nested routes like /session/assets/file.js
+  else if (
+    uri.includes("/assets/") ||
+    uri.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot)$/)
+  ) {
+    let assetPath = uri
+
+    // If the URI contains /assets/ anywhere (like /session/assets/file.js), extract just the /assets/... part
+    if (uri.includes("/assets/")) {
+      assetPath = uri.substring(uri.indexOf("/assets/"))
+      console.log("Extracted asset path from nested route:", assetPath)
+    }
+
+    request.uri = `/${subDomain}${assetPath}`
+    console.log("Case: Asset request - New URI:", request.uri)
+  }
+  // Handle SPA routes (paths without file extensions that aren't assets)
   else if (!uri.includes(".") && !uri.endsWith("/")) {
     // This is likely a SPA route, serve index.html for client-side routing
     request.uri = `/${subDomain}/index.html`
     console.log("Case: SPA route - New URI:", request.uri)
   }
-  // For everything else (static files like .js, .css, .png, etc.)
+  // For everything else, apply subdomain prefix
   else {
     request.uri = `/${subDomain}${uri}`
-    console.log("Case: Static file - New URI:", request.uri)
+    console.log("Case: Other file - New URI:", request.uri)
   }
 
   console.log("Final request.uri:", request.uri)
