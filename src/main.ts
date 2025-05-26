@@ -28,7 +28,7 @@ async function createAwsResources({
   environment,
 }: CreateAwsResourcesInputParams) {
   // TODO: Ability to give custom region for S3 bucket
-  const originId = `${bucketName}.s3.us-west-2.amazonaws.com`
+  const originId = `${bucketName}.s3.us-east-1.amazonaws.com`
   await setupS3Bucket(bucketName)
   const cloudfront = await createCloudfront(originId)
   await updateBucketPolicy(bucketName, cloudfront.id)
@@ -107,24 +107,29 @@ export async function run(): Promise<void> {
   try {
     const { action } = context.payload
     const pullRequest = context.payload.pull_request
-    if (!pullRequest) {
+    const ref = context.ref
+    const isPullRequest = !!pullRequest
+    const isBranchPush = context.eventName === "push" && ref === "refs/heads/gameplay-website-v2"
+
+    if (!isPullRequest && !isBranchPush) {
       throw new Error(
-        "This action can only be run on pull requests. Exiting...",
+        "This action can only be run on pull requests or dev branch pushes. Exiting...",
       )
     }
 
     const appName = getAppName()
     const domainName = getDomainName()
     const subdomain = getSubDomain()
-    const pullRequestNumber = pullRequest.number
+    const branchName = isPullRequest ? pullRequest.head.ref : "gameplay-website-v2"
+    const pullRequestNumber = isPullRequest ? pullRequest.number : 0
 
-    const environment =
-      subdomain && subdomain.length > 0
+    const environment = isPullRequest
+      ? subdomain && subdomain.length > 0
         ? `${subdomain}-${pullRequestNumber}`
         : `${pullRequestNumber}`
+      : subdomain 
 
     const bucketName = `${appName}-preview-deployment`
-    const branchName = pullRequest.head.ref
 
     const params = {
       appName,
@@ -137,20 +142,25 @@ export async function run(): Promise<void> {
 
     console.log("Running action with params", params)
 
-    switch (action) {
-      case "opened":
-      case "reopened":
-      case "synchronize":
-        await createPreviewEnvironment(params)
-        break
-      case "closed":
-        await deletePreviewEnvironment(params)
-        break
-      default:
-        throw new Error(`${action} is not implemented...`)
+    if (isPullRequest) {
+      switch (action) {
+        case "opened":
+        case "reopened":
+        case "synchronize":
+          await createPreviewEnvironment(params)
+          break
+        case "closed":
+          await deletePreviewEnvironment(params)
+          break
+        default:
+          throw new Error(`${action} is not implemented...`)
+      }
+    } else if (isBranchPush) {
+      await deletePreviewEnvironment(params) // delete previous deployment
+      await createPreviewEnvironment(params) // make new one
     }
   } catch (error) {
-    // Fail the workflow run if an error occurs
     if (error instanceof Error) core.setFailed(error.message)
   }
 }
+
