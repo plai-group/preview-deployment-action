@@ -89202,12 +89202,13 @@ const client = new client_cloudfront_1.CloudFrontClient();
 function getDefaultDistributionInput(originId, originAccessControlId, cloudfrontFunctionArn) {
     const appName = (0, config_1.getAppName)();
     const domainName = (0, config_1.getDomainName)();
+    const subdomain = (0, config_1.getSubDomain)();
     return {
         DistributionConfig: {
             CallerReference: appName,
             Aliases: {
-                Quantity: 1,
-                Items: [`*.${domainName}`],
+                Quantity: Number(1),
+                Items: [`${subdomain}.${domainName}`],
             },
             Origins: {
                 Quantity: 1,
@@ -89815,6 +89816,7 @@ async function createDeployment(branchName, environment) {
         required_contexts: [], // no checks required
         environment,
     });
+    console.log("Deployment response from GitHub:", data);
     if (!data || !("id" in data)) {
         throw new Error("Failed to create deployment");
     }
@@ -89968,18 +89970,25 @@ async function run() {
     try {
         const { action } = github_1.context.payload;
         const pullRequest = github_1.context.payload.pull_request;
-        if (!pullRequest) {
-            throw new Error("This action can only be run on pull requests. Exiting...");
+        const ref = github_1.context.ref;
+        const isPullRequest = !!pullRequest;
+        const isBranchPush = github_1.context.eventName === "push" && ref === "refs/heads/gameplay-website-v2";
+        if (!isPullRequest && !isBranchPush) {
+            throw new Error("This action can only be run on pull requests or dev branch pushes. Exiting...");
         }
         const appName = (0, config_1.getAppName)();
         const domainName = (0, config_1.getDomainName)();
         const subdomain = (0, config_1.getSubDomain)();
-        const pullRequestNumber = pullRequest.number;
-        const environment = subdomain && subdomain.length > 0
-            ? `${subdomain}-${pullRequestNumber}`
-            : `${pullRequestNumber}`;
+        const branchName = isPullRequest
+            ? pullRequest.head.ref
+            : "gameplay-website-v2";
+        const pullRequestNumber = isPullRequest ? pullRequest.number : 0;
+        const environment = isPullRequest
+            ? subdomain && subdomain.length > 0
+                ? `${subdomain}-${pullRequestNumber}`
+                : `${pullRequestNumber}`
+            : subdomain;
         const bucketName = `${appName}-preview-deployment`;
-        const branchName = pullRequest.head.ref;
         const params = {
             appName,
             domainName,
@@ -89989,21 +89998,26 @@ async function run() {
             pullRequestNumber,
         };
         console.log("Running action with params", params);
-        switch (action) {
-            case "opened":
-            case "reopened":
-            case "synchronize":
-                await createPreviewEnvironment(params);
-                break;
-            case "closed":
-                await deletePreviewEnvironment(params);
-                break;
-            default:
-                throw new Error(`${action} is not implemented...`);
+        if (isPullRequest) {
+            switch (action) {
+                case "opened":
+                case "reopened":
+                case "synchronize":
+                    await createPreviewEnvironment(params);
+                    break;
+                case "closed":
+                    await deletePreviewEnvironment(params);
+                    break;
+                default:
+                    throw new Error(`${action} is not implemented...`);
+            }
+        }
+        else if (isBranchPush) {
+            await deletePreviewEnvironment(params); // delete previous deployment
+            await createPreviewEnvironment(params); // make new one
         }
     }
     catch (error) {
-        // Fail the workflow run if an error occurs
         if (error instanceof Error)
             core.setFailed(error.message);
     }
