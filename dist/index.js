@@ -89202,15 +89202,15 @@ const client = new client_cloudfront_1.CloudFrontClient();
 function getDefaultDistributionInput(originId, originAccessControlId, cloudfrontFunctionArn) {
     const appName = (0, config_1.getAppName)();
     const domainName = (0, config_1.getDomainName)();
-    const defaultDistributionInput = {
+    return {
         DistributionConfig: {
             CallerReference: appName,
             Aliases: {
-                Quantity: Number(1),
+                Quantity: 1,
                 Items: [`*.${domainName}`],
             },
             Origins: {
-                Quantity: Number(1),
+                Quantity: 1,
                 Items: [
                     {
                         Id: originId,
@@ -89224,18 +89224,34 @@ function getDefaultDistributionInput(originId, originAccessControlId, cloudfront
                             OriginAccessIdentity: "",
                         },
                         CustomHeaders: {
-                            Quantity: Number(0),
+                            Quantity: 0,
+                            Items: [],
                         },
-                        connectionTimeout: 10,
-                        connectionAttempts: 3,
+                        ConnectionTimeout: 10,
+                        ConnectionAttempts: 3,
                     },
                 ],
             },
             CacheBehaviors: {
-                Quantity: Number(0),
+                Quantity: 0,
+                Items: [],
             },
             CustomErrorResponses: {
-                Quantity: Number(0),
+                Quantity: 2,
+                Items: [
+                    {
+                        ErrorCode: 403, // S3 returns 403 for missing files
+                        ResponseCode: "200",
+                        ResponsePagePath: "/index.html", // CloudFront function will prefix this
+                        ErrorCachingMinTTL: 10,
+                    },
+                    {
+                        ErrorCode: 404, // S3 returns 404 for missing files
+                        ResponseCode: "200",
+                        ResponsePagePath: "/index.html", // CloudFront function will prefix this
+                        ErrorCachingMinTTL: 10,
+                    },
+                ],
             },
             DefaultCacheBehavior: {
                 TargetOriginId: originId,
@@ -89243,11 +89259,11 @@ function getDefaultDistributionInput(originId, originAccessControlId, cloudfront
                 CachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad", // CachingDisabled
                 ViewerProtocolPolicy: client_cloudfront_1.ViewerProtocolPolicy.redirect_to_https,
                 LambdaFunctionAssociations: {
-                    Quantity: Number(0),
+                    Quantity: 0,
                     Items: [],
                 },
                 FunctionAssociations: {
-                    Quantity: Number(1),
+                    Quantity: 1,
                     Items: [
                         {
                             FunctionARN: cloudfrontFunctionArn,
@@ -89256,7 +89272,7 @@ function getDefaultDistributionInput(originId, originAccessControlId, cloudfront
                     ],
                 },
                 AllowedMethods: {
-                    Quantity: Number(7),
+                    Quantity: 7,
                     Items: [
                         client_cloudfront_1.Method.GET,
                         client_cloudfront_1.Method.HEAD,
@@ -89267,7 +89283,7 @@ function getDefaultDistributionInput(originId, originAccessControlId, cloudfront
                         client_cloudfront_1.Method.DELETE,
                     ],
                     CachedMethods: {
-                        Quantity: Number(2),
+                        Quantity: 2,
                         Items: [client_cloudfront_1.Method.GET, client_cloudfront_1.Method.HEAD],
                     },
                 },
@@ -89291,7 +89307,8 @@ function getDefaultDistributionInput(originId, originAccessControlId, cloudfront
             Restrictions: {
                 GeoRestriction: {
                     RestrictionType: client_cloudfront_1.GeoRestrictionType.none,
-                    Quantity: Number(0),
+                    Quantity: 0,
+                    Items: [],
                 },
             },
             ViewerCertificate: {
@@ -89303,25 +89320,24 @@ function getDefaultDistributionInput(originId, originAccessControlId, cloudfront
             },
         },
     };
-    return defaultDistributionInput;
 }
 async function getCloudfrontByOrigin(originId) {
-    const distributions = await client.send(new client_cloudfront_1.ListDistributionsCommand());
-    const distributionId = distributions.DistributionList?.Items?.find((item) => item.Origins?.Items?.[0]?.DomainName === originId)?.Id;
-    if (!distributionId)
+    const distributions = await client.send(new client_cloudfront_1.ListDistributionsCommand({}));
+    const distributionItem = distributions.DistributionList?.Items?.find((item) => item.Origins?.Items?.[0]?.DomainName === originId);
+    if (!distributionItem?.Id)
         return;
-    const distribution = await client.send(new client_cloudfront_1.GetDistributionCommand({ Id: distributionId }));
+    const distribution = await client.send(new client_cloudfront_1.GetDistributionCommand({ Id: distributionItem.Id }));
     return distribution;
 }
 exports.getCloudfrontByOrigin = getCloudfrontByOrigin;
 async function getOriginAccessControl(originId) {
-    const originAccessControls = await client.send(new client_cloudfront_1.ListOriginAccessControlsCommand());
+    const originAccessControls = await client.send(new client_cloudfront_1.ListOriginAccessControlsCommand({}));
     const originAccessControl = originAccessControls.OriginAccessControlList?.Items?.find((item) => item.Name === originId);
     if (!originAccessControl) {
         const originAccessControlParams = {
             OriginAccessControlConfig: {
                 Name: originId,
-                Description: "Origin Access Control for Barecheck Preview Deployments",
+                Description: "Origin Access Control for Preview Deployments",
                 SigningProtocol: client_cloudfront_1.OriginAccessControlSigningProtocols.sigv4,
                 SigningBehavior: client_cloudfront_1.OriginAccessControlSigningBehaviors.always,
                 OriginAccessControlOriginType: client_cloudfront_1.OriginAccessControlOriginTypes.s3,
@@ -89333,11 +89349,11 @@ async function getOriginAccessControl(originId) {
         return originAccessControlId;
     }
     const originAccessControlId = originAccessControl.Id || "";
-    console.log("Origin Access Control:", originAccessControlId);
+    console.log("Found existing Origin Access Control:", originAccessControlId);
     return originAccessControlId;
 }
 async function getCloudfrontFunc(functionName) {
-    const functions = await client.send(new client_cloudfront_1.ListFunctionsCommand());
+    const functions = await client.send(new client_cloudfront_1.ListFunctionsCommand({}));
     const cloudfrontFunction = functions.FunctionList?.Items?.find((item) => item.Name === functionName);
     if (!cloudfrontFunction)
         return;
@@ -89354,7 +89370,7 @@ async function publishCloudfrontFunction(functionName, version) {
     };
     const res = await client.send(new client_cloudfront_1.PublishFunctionCommand(publishFunctionParams));
     const publishedArn = res.FunctionSummary?.FunctionMetadata?.FunctionARN;
-    console.log("Published Cloudfront Function:", functionName);
+    console.log("Published CloudFront Function:", functionName);
     return publishedArn || "";
 }
 async function createCloudfrontFunction() {
@@ -89369,7 +89385,8 @@ async function createCloudfrontFunction() {
             Comment: `Function for ${appName} Preview Deployments`,
             Runtime: client_cloudfront_1.FunctionRuntime.cloudfront_js_2_0,
             KeyValueStoreAssociations: {
-                Quantity: Number(0),
+                Quantity: 0,
+                Items: [],
             },
         },
         FunctionCode: functionCode,
@@ -89378,54 +89395,111 @@ async function createCloudfrontFunction() {
         const functionData = await client.send(new client_cloudfront_1.CreateFunctionCommand(functionParams));
         const createdFunctionArn = functionData?.FunctionSummary?.FunctionMetadata?.FunctionARN;
         if (!createdFunctionArn)
-            throw new Error("Couldn't create Cloudfront function");
-        console.log("Created Cloudfront Function:", functionName);
+            throw new Error("Couldn't create CloudFront function");
+        console.log("Created CloudFront Function:", functionName);
         const publishedArn = await publishCloudfrontFunction(functionName, functionData.ETag || "");
         return publishedArn;
     }
     else {
-        console.log("Cloudfront Function already exists");
+        console.log("CloudFront Function already exists, updating...");
         const res = await client.send(new client_cloudfront_1.UpdateFunctionCommand({
             Name: functionName,
             IfMatch: cloudfrontFunc.version,
             FunctionConfig: functionParams.FunctionConfig,
             FunctionCode: functionParams.FunctionCode,
         }));
-        console.log("Updated Cloudfront Function:", functionName);
+        console.log("Updated CloudFront Function:", functionName);
         const publishedArn = await publishCloudfrontFunction(functionName, res.ETag || "");
         return publishedArn;
     }
+}
+// Helper function to check if distribution needs updating
+function needsDistributionUpdate(existingConfig, newConfig) {
+    // Check if CustomErrorResponses configuration is different
+    const existingErrorResponses = existingConfig.CustomErrorResponses;
+    const newErrorResponses = newConfig.CustomErrorResponses;
+    if (existingErrorResponses?.Quantity !== newErrorResponses?.Quantity) {
+        return true;
+    }
+    // If we have error responses, check if they match
+    if (newErrorResponses?.Quantity && newErrorResponses.Quantity > 0) {
+        if (!existingErrorResponses?.Items ||
+            existingErrorResponses.Items.length === 0) {
+            return true; // Need to add error responses
+        }
+        // Check if error response configuration matches
+        const hasMatchingErrorPages = newErrorResponses.Items?.every((newItem) => existingErrorResponses.Items?.some((existingItem) => existingItem.ErrorCode === newItem.ErrorCode &&
+            existingItem.ResponseCode === newItem.ResponseCode &&
+            existingItem.ResponsePagePath === newItem.ResponsePagePath)) ?? false;
+        if (!hasMatchingErrorPages) {
+            return true;
+        }
+    }
+    // Check if function associations have changed
+    const existingFunctions = existingConfig.DefaultCacheBehavior?.FunctionAssociations;
+    const newFunctions = newConfig.DefaultCacheBehavior?.FunctionAssociations;
+    if (existingFunctions?.Quantity !== newFunctions?.Quantity) {
+        return true;
+    }
+    if (newFunctions?.Quantity && newFunctions.Quantity > 0) {
+        const functionsMatch = newFunctions.Items?.every((newFunc) => existingFunctions?.Items?.some((existingFunc) => existingFunc.FunctionARN === newFunc.FunctionARN &&
+            existingFunc.EventType === newFunc.EventType)) ?? false;
+        if (!functionsMatch) {
+            return true;
+        }
+    }
+    return false;
 }
 async function createCloudfront(originId) {
     const distributionFound = await getCloudfrontByOrigin(originId);
     const originAccessControlId = await getOriginAccessControl(originId);
     const cloudfrontFunctionArn = await createCloudfrontFunction();
     const distributionInput = getDefaultDistributionInput(originId, originAccessControlId, cloudfrontFunctionArn);
-    console.log("Creating Cloudfront Distribution", distributionInput);
-    console.log("Cloudfront Distribution Aliases", distributionInput.DistributionConfig.Aliases.Items);
-    console.log("Cloudfront Distribution Origins", distributionInput.DistributionConfig.Origins.Items);
+    console.log("Creating/Updating CloudFront Distribution for origin:", originId);
+    console.log("CloudFront Distribution Aliases:", distributionInput.DistributionConfig?.Aliases?.Items);
+    console.log("CloudFront Distribution Origins:", distributionInput.DistributionConfig?.Origins?.Items);
     let distribution;
     if (!distributionFound) {
+        // CREATE new distribution
+        console.log("Creating new CloudFront distribution...");
         const command = new client_cloudfront_1.CreateDistributionCommand(distributionInput);
         const res = await client.send(command);
         distribution = res.Distribution;
+        console.log("Created new CloudFront distribution:", distribution?.Id);
     }
     else {
-        console.log("Updating Cloudfront Distribution", {
-            id: distributionFound.Distribution?.Id,
-            eTag: distributionFound.ETag,
-        });
-        // TODO: Ability to update Cloudfront distribution
-        // const command = new UpdateDistributionCommand({
-        //   Id: distributionFound?.Distribution?.Id,
-        //   IfMatch: distributionFound?.ETag,
-        //   DistributionConfig: distributionInput.DistributionConfig,
-        // })
-        // const res = await client.send(command)
-        distribution = distributionFound?.Distribution;
+        // UPDATE existing distribution if needed
+        const existingConfig = distributionFound.Distribution?.DistributionConfig;
+        if (existingConfig &&
+            needsDistributionUpdate(existingConfig, distributionInput.DistributionConfig)) {
+            console.log("Updating existing CloudFront distribution:", {
+                id: distributionFound.Distribution?.Id,
+                eTag: distributionFound.ETag,
+            });
+            const updateInput = {
+                Id: distributionFound.Distribution?.Id,
+                IfMatch: distributionFound.ETag,
+                DistributionConfig: distributionInput.DistributionConfig,
+            };
+            const command = new client_cloudfront_1.UpdateDistributionCommand(updateInput);
+            try {
+                const res = await client.send(command);
+                distribution = res.Distribution;
+                console.log("Successfully updated CloudFront distribution");
+            }
+            catch (error) {
+                console.error("Failed to update CloudFront distribution:", error);
+                // Fall back to using existing distribution
+                distribution = distributionFound.Distribution;
+            }
+        }
+        else {
+            console.log("CloudFront distribution is already up to date");
+            distribution = distributionFound.Distribution;
+        }
     }
     if (!distribution || !distribution.Id || !distribution.DomainName)
-        throw new Error("Cloudfront distribution doesn't exist");
+        throw new Error("CloudFront distribution doesn't exist");
     return {
         id: distribution.Id,
         domainName: distribution.DomainName,
@@ -89737,7 +89811,6 @@ async function createDeployment(branchName, environment) {
         owner,
         repo,
         ref: `refs/heads/${branchName}`,
-        auto_merge: true,
         transient_environment: true,
         required_contexts: [], // no checks required
         environment,
