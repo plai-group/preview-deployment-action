@@ -73,20 +73,19 @@ function getDefaultDistributionInput(
       CacheBehaviors: {
         Quantity: Number(0),
       },
-      // UPDATED: Error pages for SPA routing
       CustomErrorResponses: {
         Quantity: Number(2),
         Items: [
           {
             ErrorCode: 403, // S3 returns 403 for missing files
             ResponseCode: 200,
-            ResponsePagePath: `/index.html`, // Will be rewritten to /{subdomain}/index.html
+            ResponsePagePath: `/index.html`, // CloudFront function will prefix this
             ErrorCachingMinTTL: 10,
           },
           {
             ErrorCode: 404, // S3 returns 404 for missing files  
             ResponseCode: 200,
-            ResponsePagePath: `/index.html`, // Will be rewritten to /{subdomain}/index.html
+            ResponsePagePath: `/index.html`, // CloudFront function will prefix this
             ErrorCachingMinTTL: 10,
           },
         ],
