@@ -90734,7 +90734,6 @@ async function run() {
             }
         }
         else if (isBranchPush) {
-            await deletePreviewEnvironment(params); // delete previous deployment
             await createPreviewEnvironment(params); // make new one
         }
     }

@@ -159,7 +159,6 @@ export async function run(): Promise<void> {
           throw new Error(`${action} is not implemented...`)
       }
     } else if (isBranchPush) {
-      await deletePreviewEnvironment(params) // delete previous deployment
       await createPreviewEnvironment(params) // make new one
     }
   } catch (error) {
