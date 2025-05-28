@@ -110,7 +110,7 @@ export async function run(): Promise<void> {
     const ref = context.ref
     const isPullRequest = !!pullRequest
     const isBranchPush =
-      context.eventName === "push" && ref === "refs/heads/gameplay-website-v2"
+      context.eventName === "push" && ref === "refs/heads/dev"
 
     if (!isPullRequest && !isBranchPush) {
       throw new Error(
@@ -123,7 +123,7 @@ export async function run(): Promise<void> {
     const subdomain = getSubDomain()
     const branchName = isPullRequest
       ? pullRequest.head.ref
-      : "gameplay-website-v2"
+      : "dev"
     const pullRequestNumber = isPullRequest ? pullRequest.number : 0
 
     const environment = isPullRequest
