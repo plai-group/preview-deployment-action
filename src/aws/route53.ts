@@ -24,7 +24,7 @@ async function findRoute53Record(zoneId: string, recordName: string) {
   const command = new ListResourceRecordSetsCommand({
     HostedZoneId: zoneId,
     // TODO: Add pagination or Use GET method
-    MaxItems: Number(200),
+    MaxItems: 300,
   })
   const response = await client.send(command)
 
