@@ -20,6 +20,9 @@ inputs:
     description: "Subdomain for preview URLs (e.g. preview).By default it will be 'preview-{PR_NUMBER}'"
     required: false
     default: "preview"
+  branch:
+    description: 'Optional branch name for custom routing or labeling'
+    required: true
 
 outputs:
   url:
