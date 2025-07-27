@@ -90468,7 +90468,7 @@ async function syncFiles({ bucketName, prefix, directory, }) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.aws = exports.getSubDomain = exports.getGithubToken = exports.getDomainName = exports.getBuidDir = exports.getAppName = void 0;
+exports.aws = exports.getSubDomain = exports.getGithubToken = exports.getBranch = exports.getDomainName = exports.getBuidDir = exports.getAppName = void 0;
 const core_1 = __nccwpck_require__(2186);
 const getAppName = () => (0, core_1.getInput)("app-name") || process.env.APP_NAME;
 exports.getAppName = getAppName;
@@ -90476,6 +90476,8 @@ const getBuidDir = () => (0, core_1.getInput)("build-dir") || process.env.BUILD_
 exports.getBuidDir = getBuidDir;
 const getDomainName = () => (0, core_1.getInput)("domain") || process.env.DOMAIN;
 exports.getDomainName = getDomainName;
+const getBranch = () => (0, core_1.getInput)("branch") || process.env.BRANCH;
+exports.getBranch = getBranch;
 const getGithubToken = () => process.env.GITHUB_TOKEN;
 exports.getGithubToken = getGithubToken;
 const getSubDomain = () => (0, core_1.getInput)("subdomain") || "preview";
@@ -90693,7 +90695,8 @@ async function run() {
         const pullRequest = github_1.context.payload.pull_request;
         const ref = github_1.context.ref;
         const isPullRequest = !!pullRequest;
-        const isBranchPush = github_1.context.eventName === "push" && ref === "refs/heads/gameplay-website-v2";
+        const branch = (0, config_1.getBranch)();
+        const isBranchPush = github_1.context.eventName === "push" && ref === `refs/heads/${branch}`;
         if (!isPullRequest && !isBranchPush) {
             throw new Error("This action can only be run on pull requests or dev branch pushes. Exiting...");
         }
@@ -90702,7 +90705,7 @@ async function run() {
         const subdomain = (0, config_1.getSubDomain)();
         const branchName = isPullRequest
             ? pullRequest.head.ref
-            : "gameplay-website-v2";
+            : branch;
         const pullRequestNumber = isPullRequest ? pullRequest.number : 0;
         const environment = isPullRequest
             ? subdomain && subdomain.length > 0

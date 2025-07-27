@@ -14,7 +14,7 @@ import {
   updateDeploymentStatus,
   deleteDeployments,
 } from "./github/deployments"
-import { getAppName, getBuidDir, getDomainName, getSubDomain } from "./config"
+import { getAppName, getBranch, getBuidDir, getDomainName, getSubDomain } from "./config"
 
 type CreateAwsResourcesInputParams = {
   bucketName: string
@@ -109,8 +109,9 @@ export async function run(): Promise<void> {
     const pullRequest = context.payload.pull_request
     const ref = context.ref
     const isPullRequest = !!pullRequest
+    const branch = getBranch()
     const isBranchPush =
-      context.eventName === "push" && ref === "refs/heads/gameplay-website-v2"
+      context.eventName === "push" && ref === `refs/heads/${branch}`
 
     if (!isPullRequest && !isBranchPush) {
       throw new Error(
@@ -123,7 +124,7 @@ export async function run(): Promise<void> {
     const subdomain = getSubDomain()
     const branchName = isPullRequest
       ? pullRequest.head.ref
-      : "gameplay-website-v2"
+      : branch
     const pullRequestNumber = isPullRequest ? pullRequest.number : 0
 
     const environment = isPullRequest
