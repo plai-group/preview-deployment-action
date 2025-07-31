@@ -253,7 +253,7 @@ async function publishCloudfrontFunction(
 
 async function createCloudfrontFunction() {
   const appName = getAppName()
-  const functionName = `${appName}PreviewDeploymentFunction`
+  const functionName = `${appName}DeploymentFunction`
 
   const cloudfrontFunc = await getCloudfrontFunc(functionName)
 
@@ -262,7 +262,7 @@ async function createCloudfrontFunction() {
   const functionParams = {
     Name: functionName,
     FunctionConfig: {
-      Comment: `Function for ${appName} Preview Deployments`,
+      Comment: `Function for ${appName} Deployments`,
       Runtime: FunctionRuntime.cloudfront_js_2_0,
       KeyValueStoreAssociations: {
         Quantity: 0,

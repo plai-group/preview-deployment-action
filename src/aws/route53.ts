@@ -83,7 +83,7 @@ export async function createRoute53Record({
           },
         },
       ],
-      Comment: `Preview deployment record for ${appName}`,
+      Comment: `Deployment record for ${appName}`,
     },
     HostedZoneId: hostedZone.Id,
   }
@@ -122,7 +122,7 @@ export async function deleteRoute53Record({
           ResourceRecordSet: record,
         },
       ],
-      Comment: `Preview deployment record for ${recordName}`,
+      Comment: `Deployment record for ${recordName}`,
     },
     HostedZoneId: hostedZone.Id,
   }

@@ -8,6 +8,8 @@ export const getDomainName = () =>
   getInput("domain") || (process.env.DOMAIN as string)
 export const getBranch = () =>
   getInput("branch") || (process.env.BRANCH as string)
+export const getTrigger = () =>
+  getInput("trigger") || (process.env.TRIGGER as string)
 
 export const getGithubToken = () => process.env.GITHUB_TOKEN as string
 

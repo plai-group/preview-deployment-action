@@ -23,6 +23,9 @@ inputs:
   branch:
     description: 'Optional branch name for custom routing or labeling'
     required: true
+  trigger:
+    description: "Boolean for whether the workflow will trigger or not"
+    required: true
 
 outputs:
   url:

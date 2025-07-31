@@ -90091,14 +90091,14 @@ async function publishCloudfrontFunction(functionName, version) {
 }
 async function createCloudfrontFunction() {
     const appName = (0, config_1.getAppName)();
-    const functionName = `${appName}PreviewDeploymentFunction`;
+    const functionName = `${appName}DeploymentFunction`;
     const cloudfrontFunc = await getCloudfrontFunc(functionName);
     const cloudfrontFuncPath = path_1.default.join(__dirname, "cloudfront-function.js");
     const functionCode = (0, fs_1.readFileSync)(cloudfrontFuncPath);
     const functionParams = {
         Name: functionName,
         FunctionConfig: {
-            Comment: `Function for ${appName} Preview Deployments`,
+            Comment: `Function for ${appName} Deployments`,
             Runtime: client_cloudfront_1.FunctionRuntime.cloudfront_js_2_0,
             KeyValueStoreAssociations: {
                 Quantity: 0,
@@ -90287,7 +90287,7 @@ async function createRoute53Record({ domainName, recordName, routeTrafficTo, }) 
                     },
                 },
             ],
-            Comment: `Preview deployment record for ${appName}`,
+            Comment: `Deployment record for ${appName}`,
         },
         HostedZoneId: hostedZone.Id,
     };
@@ -90312,7 +90312,7 @@ async function deleteRoute53Record({ domainName, recordName, }) {
                     ResourceRecordSet: record,
                 },
             ],
-            Comment: `Preview deployment record for ${recordName}`,
+            Comment: `Deployment record for ${recordName}`,
         },
         HostedZoneId: hostedZone.Id,
     };
@@ -90468,7 +90468,7 @@ async function syncFiles({ bucketName, prefix, directory, }) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.aws = exports.getSubDomain = exports.getGithubToken = exports.getBranch = exports.getDomainName = exports.getBuidDir = exports.getAppName = void 0;
+exports.aws = exports.getSubDomain = exports.getGithubToken = exports.getTrigger = exports.getBranch = exports.getDomainName = exports.getBuidDir = exports.getAppName = void 0;
 const core_1 = __nccwpck_require__(2186);
 const getAppName = () => (0, core_1.getInput)("app-name") || process.env.APP_NAME;
 exports.getAppName = getAppName;
@@ -90478,6 +90478,8 @@ const getDomainName = () => (0, core_1.getInput)("domain") || process.env.DOMAIN
 exports.getDomainName = getDomainName;
 const getBranch = () => (0, core_1.getInput)("branch") || process.env.BRANCH;
 exports.getBranch = getBranch;
+const getTrigger = () => (0, core_1.getInput)("trigger") || process.env.TRIGGER;
+exports.getTrigger = getTrigger;
 const getGithubToken = () => process.env.GITHUB_TOKEN;
 exports.getGithubToken = getGithubToken;
 const getSubDomain = () => (0, core_1.getInput)("subdomain") || "preview";
@@ -90697,8 +90699,13 @@ async function run() {
         const isPullRequest = !!pullRequest;
         const branch = (0, config_1.getBranch)();
         const isBranchPush = github_1.context.eventName === "push" && ref === `refs/heads/${branch}`;
+        const trigger = (0, config_1.getTrigger)();
+        if (!trigger) {
+            console.log("This workflow is set to not trigger. Skipping deployment.");
+            return;
+        }
         if (!isPullRequest && !isBranchPush) {
-            throw new Error("This action can only be run on pull requests or dev branch pushes. Exiting...");
+            throw new Error("This action can only be run on pull requests or branch pushes to main. Exiting...");
         }
         const appName = (0, config_1.getAppName)();
         const domainName = (0, config_1.getDomainName)();
@@ -90712,7 +90719,7 @@ async function run() {
                 ? `${subdomain}-${pullRequestNumber}`
                 : `${pullRequestNumber}`
             : subdomain;
-        const bucketName = `${appName}-preview-deployment`;
+        const bucketName = `${appName}-prod`;
         const params = {
             appName,
             domainName,

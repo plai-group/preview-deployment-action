@@ -14,7 +14,7 @@ import {
   updateDeploymentStatus,
   deleteDeployments,
 } from "./github/deployments"
-import { getAppName, getBranch, getBuidDir, getDomainName, getSubDomain } from "./config"
+import { getAppName, getBranch, getBuidDir, getDomainName, getSubDomain, getTrigger } from "./config"
 
 type CreateAwsResourcesInputParams = {
   bucketName: string
@@ -113,9 +113,15 @@ export async function run(): Promise<void> {
     const isBranchPush =
       context.eventName === "push" && ref === `refs/heads/${branch}`
 
+    const trigger = getTrigger()
+    if (!trigger) {
+      console.log("This workflow is set to not trigger. Skipping deployment.")
+      return;
+    }
+
     if (!isPullRequest && !isBranchPush) {
       throw new Error(
-        "This action can only be run on pull requests or dev branch pushes. Exiting...",
+        "This action can only be run on pull requests or branch pushes to main. Exiting...",
       )
     }
 
@@ -133,7 +139,7 @@ export async function run(): Promise<void> {
         : `${pullRequestNumber}`
       : subdomain
 
-    const bucketName = `${appName}-preview-deployment`
+    const bucketName = `${appName}-prod`
 
     const params = {
       appName,
